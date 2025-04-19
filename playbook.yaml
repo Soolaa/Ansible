@@ -1,0 +1,58 @@
+- name: Install node exportes om minio
+  hosts: all
+  become: yes
+  tasks:
+    - name: apt update and upgared
+      ansible.builtin.apt:
+        #upgrade: no
+        update_cache: yes
+      
+    - name: create exporter user
+      ansible.builtin.user:
+        name: prometheus
+        system: yes
+        shell: /usr/sbin/nologin
+    - name: get node exporter file
+      ansible.builtin.get_url:
+        url: "https://github.com/prometheus/node_exporter/releases/download/v1.6.1/node_exporter-1.6.1.linux-amd64.tar.gz"
+        dest: "/tmp/node_exporter-1.6.1.linux-amd64.tar.gz"
+    - name: untar file
+      ansible.builtin.unarchive:
+        src: "/tmp/node_exporter-1.6.1.linux-amd64.tar.gz"
+        dest: "/tmp/"
+        remote_src: yes
+    - name: move binary
+      ansible.builtin.command:
+        cmd: "mv /tmp/node_exporter-1.6.1.linux-amd64/node_exporter /usr/local/bin/"
+        creates: "/usr/local/bin/node_exporter"
+    - name: create service file
+      ansible.builtin.template:
+        src: node_exporter.service.j2
+        dest: /etc/systemd/system/node_exporter.service
+      notify: restart node exporter
+    
+    - name: enable and start node exporter
+      ansible.builtin.systemd:
+        name: node_exporter
+        state: started
+        enabled: yes
+
+    - name: Check with curl and timeout
+      ansible.builtin.command:
+        cmd: "curl -s --max-time 5 http://localhost:9100/metrics"
+      register: curl_result
+
+    - name: print curl curl_result
+      ansible.builtin.debug:
+        msg: "{{curl_result.stdout}}"
+
+
+  handlers:
+    - name: restart node exporter
+      ansible.builtin.systemd:
+        name: node_exporter
+        state: restarted
+
+
+  
+       
